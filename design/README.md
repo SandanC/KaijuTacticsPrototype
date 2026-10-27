@@ -1,3 +1,19 @@
+# Battle-screen concept 02 — for design review
+
+![Revised battle-screen mockup](battle-screen-mockup-02.png)
+
+Latest requested changes:
+- Standard characters occupy one tile. Larger footprints are reserved for explicitly designed future bosses.
+- Rolled, used, and movement dice sit together in continuous open trays, without individual dice sockets. Each die can be clicked and dragged.
+- Ability cards retain individual symbol/color payment slots.
+- Ability ranges use small top-down square grids: blue marks the player, gold marks orthogonally adjacent squares. Tail Slash chooses one adjacent target; Roar affects all adjacent targets.
+
+This remains static concept art. No gameplay code was changed. The map route and resource counts are illustrative and must not be treated as a validated movement preview or finalized balance. Draw count, equipped-card count, and colored-slot visuals remain open for later design review.
+
+---
+
+## Previous concept
+
 # Battle-screen concept 01 — for design review
 
 ![Battle-screen mockup](battle-screen-mockup-01.png)
