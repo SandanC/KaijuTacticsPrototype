@@ -49,3 +49,26 @@ static func cost_text(cost: Array) -> String:
   var color: String = req.get("color", "")
   parts.append("%d %s%s" % [req.get("count", 1), (color.capitalize() + " ") if not color.is_empty() else "any-color ", str(req.symbol).capitalize()])
  return " + ".join(parts)
+
+## Partial payment must map every selected die to a different cost slot.
+static func valid_partial(cost: Array, dice: Array, selected: Array) -> bool:
+ var reqs := requirements(cost)
+ if selected.size() > reqs.size():
+  return false
+ var chosen: Array = []
+ for index in selected:
+  if index < 0 or index >= dice.size() or index in chosen:
+   return false
+  chosen.append(index)
+ return _partial_search(reqs, dice, selected, 0, [])
+
+static func _partial_search(reqs: Array, dice: Array, selected: Array, index: int, used: Array) -> bool:
+ if index == selected.size():
+  return true
+ for slot in range(reqs.size()):
+  if slot not in used and matches(dice[selected[index]], reqs[slot]):
+   var next := used.duplicate()
+   next.append(slot)
+   if _partial_search(reqs, dice, selected, index + 1, next):
+    return true
+ return false

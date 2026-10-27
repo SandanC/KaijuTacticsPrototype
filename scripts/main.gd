@@ -2,6 +2,10 @@ extends Control
 const Battle = preload("res://scripts/battle.gd")
 const Rules = preload("res://scripts/rules.gd")
 const Board = preload("res://scripts/board.gd")
+const DieView = preload("res://scripts/die_view.gd")
+const CardView = preload("res://scripts/card_view.gd")
+var rolling := false
+var displayed_rolls := -1
 var battle
 var board
 var dice_row: HBoxContainer
@@ -32,9 +36,9 @@ func _theme() -> void:
  skin.set_color("font_color", "Label", Color("e3e9dc"))
  for kind in ["normal", "hover", "pressed", "focus", "disabled"]:
   var box := StyleBoxFlat.new()
-  box.bg_color = Color("2c4741") if kind == "normal" else Color("48665a")
+  box.bg_color = Color("293e59") if kind == "normal" else Color("3a5876")
   if kind == "disabled":
-   box.bg_color = Color("21332f")
+   box.bg_color = Color("1c2b40")
   box.set_corner_radius_all(7)
   box.set_content_margin_all(12)
   if kind == "focus":
@@ -45,7 +49,7 @@ func _theme() -> void:
  skin.set_color("font_disabled_color", "Button", Color("71877b"))
  theme = skin
  var background := ColorRect.new()
- background.color = Color("102420")
+ background.color = Color("101c2d")
  background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  background.mouse_filter = Control.MOUSE_FILTER_IGNORE
  add_child(background)
@@ -82,7 +86,7 @@ func _build() -> void:
  title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
  header.add_child(title)
  title.add_child(label("KAIJU / DICE & DESTRUCTION", 30, Color("e8d8a8")))
- title.add_child(label("TACTICAL DICEBUILDER     •     FIRST CONTACT", 13, Color("97af9e")))
+ title.add_child(label("TACTICAL RPG     /     FIRST CONTACT", 13, Color("97af9e")))
  button("New battle", restart, header)
  var body := HBoxContainer.new()
  body.add_theme_constant_override("separation", 28)
@@ -95,12 +99,12 @@ func _build() -> void:
  board = Board.new()
  board.tile_clicked.connect(on_tile)
  left.add_child(board)
- var legend := label("K  Mossback     I  Infantry     ▣  Gold outline = legal target", 14, Color("acbba8"))
+ var legend := label("Blue tiles: movement    /    Red tiles: attack    /    Gold: cursor", 14, Color("acbba8"))
  left.add_child(legend)
  var right := VBoxContainer.new()
  right.custom_minimum_size.x = 590
  right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
- right.add_theme_constant_override("separation", 8)
+ right.add_theme_constant_override("separation", 6)
  body.add_child(right)
  phase = label("", 22, Color("e8d8a8"))
  right.add_child(phase)
@@ -108,18 +112,27 @@ func _build() -> void:
  intent_label = label("", 16, Color("edaa77"))
  right.add_child(intent_label)
  right.add_child(HSeparator.new())
- right.add_child(label("01  /  YOUR SHARED DICE POOL", 14, Color("a8c294")))
+ right.add_child(label("DICE TRAY  /  ROLL → DRAG → ACT", 14, Color("a8c294")))
  dice_row = HBoxContainer.new()
  dice_row.add_theme_constant_override("separation", 12)
  right.add_child(dice_row)
- right.add_child(label("Click dice to allocate payment. Color + symbol both matter.", 14, Color("9eb29f")))
- right.add_child(label("02  /  ABILITY TABLEAU", 14, Color("a8c294")))
+ right.add_child(label("Drag a die onto an ability below. Each face is one resource.", 14, Color("9eb29f")))
+ right.add_child(label("COMMANDS  /  DROP MATCHING DICE ON A CARD", 14, Color("a8c294")))
  cards_column = VBoxContainer.new()
  cards_column.add_theme_constant_override("separation", 9)
  right.add_child(cards_column)
  var actions := HBoxContainer.new()
  right.add_child(actions)
- move_button = button("Move · 1 Movement", func(): battle.choose_move(); refresh(), actions)
+ move_button = CardView.new()
+ move_button.text = "Move · 1 Movement"
+ move_button.pressed.connect(func():
+  if not rolling:
+   battle.choose_move()
+   refresh())
+ var move_card := {"id": "move", "name": "Move", "cost": [{"symbol": "movement", "count": 1}], "target": "move"}
+ move_button.accepts_die = func(payload): return can_drop_die(move_card, payload)
+ move_button.die_dropped.connect(func(payload): drop_die(move_card, payload))
+ actions.add_child(move_button)
  cancel_button = button("Cancel [Esc]", func(): battle.cancel(); refresh(), actions)
  suggestion = button("Suggest dice", suggest_dice, actions)
  payment = label("", 15, Color("e8d8a8"))
@@ -135,7 +148,7 @@ func _build() -> void:
  log_label.autowrap_mode = TextServer.AUTOWRAP_OFF
  log_label.custom_minimum_size.x = 570
  right.add_child(log_label)
- var foot := label("HOW TO PLAY   Choose card / Move → select matching dice → click gold tile to confirm. Pass to reroll next turn. D / R faces have no action in this slice.", 14, Color("a4b69f"))
+ var foot := label("Drag dice onto a card → click a highlighted target to confirm. Or choose a command and click dice. Escape cancels. Space ends turn.", 14, Color("a4b69f"))
  foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
  foot.name = "HelpFooter"
  root.add_child(foot)
@@ -147,7 +160,7 @@ func _build() -> void:
  overlay.offset_bottom = 145
  overlay.custom_minimum_size = Vector2(680, 290)
  var box := StyleBoxFlat.new()
- box.bg_color = Color("1e3831")
+ box.bg_color = Color("22364f")
  box.border_color = Color("d4bb7f")
  box.set_border_width_all(2)
  box.set_corner_radius_all(14)
@@ -168,6 +181,9 @@ func restart() -> void:
  battle = Battle.new()
  board.battle = battle
  timer_pending = false
+ displayed_rolls = -1
+ rolling = false
+ board.initialized = false
  refresh()
 
 func clear_children(node: Node) -> void:
@@ -181,39 +197,53 @@ func refresh() -> void:
  phase.text = "TURN %02d  /  %s" % [battle.turn, Battle.State.keys()[battle.state].replace("_", " ")]
  intent_label.text = "ENEMY INTENT  /  " + battle.intent(battle.enemies[0])
  feedback.text = battle.message
- clear_children(dice_row)
+ var new_roll: bool = displayed_rolls != battle.rolls
+ if dice_row.get_child_count() != battle.dice.size():
+  clear_children(dice_row)
+  for i in range(battle.dice.size()):
+   var view = DieView.new()
+   view.pressed.connect(func():
+    if not rolling:
+     battle.toggle_die(i)
+     refresh())
+   dice_row.add_child(view)
+ if new_roll:
+  displayed_rolls = battle.rolls
+  rolling = true
  for i in range(battle.dice.size()):
-  var die: Dictionary = battle.dice[i]
-  var selected: bool = i in battle.selected
-  var text: String = "%s DIE #%d\n%s\n%s" % [str(die.color).to_upper(), die.id + 1, str(die.symbol).to_upper(), "SPENT" if die.spent else ("✓ SELECTED" if selected else "AVAILABLE")]
-  var die_button := button(text, func(): battle.toggle_die(i); refresh(), dice_row)
-  die_button.custom_minimum_size = Vector2(215, 90)
-  die_button.disabled = die.spent or battle.state != Battle.State.PLAYER_TARGETING
-  var style := StyleBoxFlat.new()
-  style.bg_color = Color("365d3d") if die.color == "green" else Color("294e67")
-  style.set_corner_radius_all(9)
-  style.set_content_margin_all(12)
-  style.set_border_width_all(3 if selected else 1)
-  style.border_color = Color("eed28e") if selected else Color("78958a")
-  die_button.add_theme_stylebox_override("normal", style)
-  if not die.spent:
-   die_button.add_theme_stylebox_override("disabled", style)
-   die_button.add_theme_color_override("font_disabled_color", Color("e3e9dc"))
+  var view = dice_row.get_child(i)
+  view.battle_token = battle.get_instance_id()
+  view.show_die(battle.dice[i], i in battle.selected, not rolling and battle.state in [Battle.State.PLAYER_ACTION, Battle.State.PLAYER_TARGETING])
+  if new_roll:
+   view.roll(i)
  clear_children(cards_column)
  for card in battle.cards:
   var affordable: bool = not Rules.allocate(card.cost, battle.dice).is_empty()
   var active: bool = battle.action.get("id", "") == card.id
   var text: String = "%s%s   /   %s\n%s\n%s" % ["› " if active else "", card.name.to_upper(), Rules.cost_text(card.cost), card.description, "PAYMENT AVAILABLE" if affordable else "NO MATCHING DICE"]
-  var card_button := button(text, func(): battle.choose(card); refresh(), cards_column)
+  var card_button = CardView.new()
+  card_button.text = text
+  card_button.pressed.connect(func():
+   if not rolling:
+    battle.choose(card)
+    refresh())
+  card_button.accepts_die = func(payload): return can_drop_die(card, payload)
+  card_button.die_dropped.connect(func(payload): drop_die(card, payload))
+  cards_column.add_child(card_button)
   card_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-  card_button.custom_minimum_size.y = 82
-  card_button.disabled = battle.state not in [Battle.State.PLAYER_ACTION, Battle.State.PLAYER_TARGETING]
- var playing: bool = battle.state in [Battle.State.PLAYER_ACTION, Battle.State.PLAYER_TARGETING]
+  card_button.add_theme_font_size_override("font_size", 14)
+  card_button.custom_minimum_size.y = 76
+  card_button.disabled = rolling or battle.state not in [Battle.State.PLAYER_ACTION, Battle.State.PLAYER_TARGETING]
+ var playing: bool = not rolling and battle.state in [Battle.State.PLAYER_ACTION, Battle.State.PLAYER_TARGETING]
  move_button.disabled = not playing
  pass_button.disabled = not playing
- cancel_button.disabled = battle.state != Battle.State.PLAYER_TARGETING
- suggestion.disabled = battle.state != Battle.State.PLAYER_TARGETING
- if battle.action.is_empty():
+ cancel_button.disabled = rolling or battle.state != Battle.State.PLAYER_TARGETING
+ suggestion.disabled = rolling or battle.state != Battle.State.PLAYER_TARGETING
+ if rolling:
+  phase.text = "TURN %02d  /  ROLLING DICE…" % battle.turn
+  payment.text = "Rolling your shared pool…"
+  feedback.text = "Wait for the dice to settle, then drag a face onto a command."
+ elif battle.action.is_empty():
   payment.text = "03  /  Choose an action to begin targeting."
  else:
   var valid: bool = Rules.valid_payment(battle.action.cost, battle.dice, battle.selected)
@@ -228,13 +258,15 @@ func refresh() -> void:
   result_detail.text = "Battle ended on turn %d · %d HP remaining\nMilestone 1 complete battle · Seed %d" % [battle.turn, battle.player.hp, battle.seed_value]
 
 func suggest_dice() -> void:
- if battle.action.is_empty():
+ if rolling or battle.action.is_empty():
   return
  battle.selected = Rules.allocate(battle.action.cost, battle.dice)
  battle.note("Suggested payment selected. Review dice, then click a gold tile to spend.")
  refresh()
 
 func on_tile(tile: Vector2i) -> void:
+ if rolling:
+  return
  if battle.state == Battle.State.PLAYER_TARGETING:
   if tile not in battle.targets():
    battle.note("Illegal target · choose a gold outlined tile. Nothing spent.")
@@ -243,7 +275,7 @@ func on_tile(tile: Vector2i) -> void:
   refresh()
 
 func end_turn() -> void:
- if not battle.end_turn():
+ if rolling or not battle.end_turn():
   return
  refresh()
  timer_pending = true
@@ -256,6 +288,8 @@ func end_turn() -> void:
  refresh()
 
 func _input(event: InputEvent) -> void:
+ if rolling:
+  return
  if event is InputEventKey and event.pressed and not event.echo:
   if event.keycode == KEY_ESCAPE:
    get_viewport().set_input_as_handled()
@@ -264,3 +298,37 @@ func _input(event: InputEvent) -> void:
   elif event.keycode == KEY_SPACE:
    get_viewport().set_input_as_handled()
    end_turn()
+
+func _process(_delta: float) -> void:
+ if rolling and dice_row.get_child_count() > 0:
+  var busy := false
+  for view in dice_row.get_children():
+   busy = busy or view.rolling
+  if not busy:
+   rolling = false
+   refresh()
+
+func can_drop_die(card: Dictionary, payload: Dictionary) -> bool:
+ if rolling or battle.state not in [Battle.State.PLAYER_ACTION, Battle.State.PLAYER_TARGETING]:
+  return false
+ if payload.get("type", "") != "battle_die" or payload.get("battle", -1) != battle.get_instance_id():
+  return false
+ var index = payload.get("index", -1)
+ if not index is int or index < 0 or index >= battle.dice.size():
+  return false
+ var proposed: Array = battle.selected.duplicate() if battle.action.get("id", "") == card.id else []
+ if index in proposed:
+  return false
+ proposed.append(index)
+ return Rules.valid_partial(card.cost, battle.dice, proposed)
+
+func drop_die(card: Dictionary, payload: Dictionary) -> void:
+ if not can_drop_die(card, payload):
+  return
+ var proposed: Array = battle.selected.duplicate() if battle.action.get("id", "") == card.id else []
+ proposed.append(payload.index)
+ if battle.action.get("id", "") != card.id:
+  battle.choose(card)
+ battle.selected = proposed
+ battle.note("Die assigned to %s. Click a highlighted target to confirm; Escape returns your dice." % card.name)
+ refresh()

@@ -15,3 +15,7 @@ The user's request permits Godot or GameMaker. This implementation uses **Godot 
 - No drafting, second encounter, alternate scenario, advanced attack shapes, terrain art, audio or external assets in this slice. The shared-pool acquisition helper is present for initialization, but reward drafting is deliberately deferred.
 
 Future decisions remain open: repeat-use policy, defense duration, movement magnitude, larger footprints, passive/color affinities, destructible terrain and ultimate-card die counts.
+
+## Requested presentation and interaction revision
+
+The battlefield now uses an isometric tactical RPG view with original drawn sprites and a navy/gold command HUD. Grass, road markings, stones and distant ridges are cosmetic and do not change the open-board scenario. Visible cube dice tumble before each turn; cosmetic face cycling never consumes gameplay RNG or changes the settled result. Actions are locked during the roll. Dragging a die onto a card stages an explicit payment, one die at a time; targeting confirms spending. Cancelling returns staged resources. These changes follow the user’s presentation and drag-payment requests and add no permanent combat mechanics.

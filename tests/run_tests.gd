@@ -127,6 +127,12 @@ func run() -> void:
  var scene = load("res://main.tscn").instantiate()
  root.add_child(scene)
  await process_frame
+ check(scene.rolling and scene.pass_button.disabled, "Turn starts with animated dice and commands locked")
+ var initial_rolls: int = scene.battle.rolls
+ scene.end_turn()
+ check(scene.battle.rolls == initial_rolls and scene.battle.turn == 1, "Cannot advance turn during rolling")
+ await create_timer(1.5).timeout
+ check(not scene.rolling and not scene.pass_button.disabled, "Commands unlock after dice settle")
  check(scene.board.size.x >= 662 and scene.cards_column.get_child_count() == 2 and scene.dice_row.get_child_count() == 2, "Production UI instantiates with board, two cards, two dice")
  scene.battle.dice[0].symbol = "movement"
  scene.move_button.pressed.emit()
@@ -134,6 +140,46 @@ func run() -> void:
  var destination: Vector2i = scene.battle.player.position + Vector2i.LEFT
  scene.board.tile_clicked.emit(destination)
  check(scene.battle.player.position == destination and scene.battle.dice[0].spent, "UI action/die/board signals perform paid move")
+ # Real drop handlers, using the exact native drag payload format.
+ scene.battle.cancel()
+ scene.battle.dice[0].spent = false
+ scene.battle.dice[0].symbol = "attack"
+ scene.battle.enemies[0].position = scene.battle.player.position + Vector2i.RIGHT
+ scene.refresh()
+ var payload := {"type": "battle_die", "index": 0, "battle": scene.battle.get_instance_id()}
+ var card_view = scene.cards_column.get_child(0)
+ check(card_view._can_drop_data(Vector2.ZERO, payload), "Tail Slash accepts dragged Attack die")
+ card_view._drop_data(Vector2.ZERO, payload)
+ check(scene.battle.selected == [0] and not scene.battle.dice[0].spent, "Drop stages exact die without spending before target confirmation")
+ check(not scene.can_drop_die(scene.battle.cards[0], payload), "Same dragged die cannot be assigned twice")
+ scene.battle.cancel()
+ check(not scene.battle.dice[0].spent and scene.battle.selected.is_empty(), "Cancel returns dragged payment")
+ scene.drop_die(scene.battle.cards[0], payload)
+ scene.on_tile(scene.battle.enemies[0].position)
+ check(scene.battle.dice[0].spent and scene.battle.enemies[0].hp == 3, "Dragged payment spends only on legal target confirmation")
+ check(not scene.can_drop_die(scene.battle.cards[0], payload), "Spent dice rejected by drop handler")
+ scene.battle.dice[0].spent = false
+ scene.battle.dice[0].symbol = "movement"
+ check(not scene.can_drop_die(scene.battle.cards[0], payload), "Wrong symbol rejected by card drop handler")
+ check(not scene.can_drop_die(scene.battle.cards[0], {"type": "battle_die", "index": 0, "battle": -1}), "Stale battle drag rejected")
+ check(not scene.can_drop_die(scene.battle.cards[0], {"type": "battle_die", "index": "0", "battle": scene.battle.get_instance_id()}), "Malformed drag rejected")
+ scene.move_button._drop_data(Vector2.ZERO, payload)
+ check(scene.battle.action.get("id", "") == "move" and scene.battle.selected == [0], "Movement die can be dropped on Move command")
+ scene.battle.cancel()
+ scene.battle.dice[0].symbol = "attack"
+ scene.battle.dice[1].symbol = "movement"
+ var mixed_card := {"id": "test_mixed", "name": "Test", "cost": [{"symbol": "attack"}, {"symbol": "movement"}], "target": "single", "range": 1, "damage": 1}
+ scene.drop_die(mixed_card, payload)
+ check(scene.battle.selected == [0], "First drop stages partial multi-die cost")
+ scene.drop_die(mixed_card, {"type": "battle_die", "index": 1, "battle": scene.battle.get_instance_id()})
+ check(scene.battle.selected == [0,1] and Rules.valid_payment(mixed_card.cost, scene.battle.dice, scene.battle.selected), "Second drop completes mixed-symbol payment")
+ scene.battle.cancel()
+ var picking_ok := true
+ for x in range(10):
+  for y in range(10):
+   var tile := Vector2i(x,y)
+   picking_ok = picking_ok and scene.board.screen_tile(scene.board.tile_center(tile)) == tile
+ check(picking_ok, "Isometric picking round-trips all 100 tile centers")
  scene.battle.enemies[0].hp = 0
  scene.battle.evaluate()
  scene.refresh()
@@ -147,6 +193,7 @@ func run() -> void:
  scene.refresh()
  check(scene.overlay.visible and scene.result_title.text == "KAIJU DOWN", "Defeat overlay displayed")
  scene.restart()
+ await create_timer(1.5).timeout
  scene.battle.note("A long record entry to exercise the fixed two-line history and ensure that controls and instructions remain visible.")
  scene.battle.note("Another long entry to exercise the record layout while all production controls remain visible.")
  scene.refresh()
