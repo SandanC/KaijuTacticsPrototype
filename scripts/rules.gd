@@ -72,3 +72,19 @@ static func _partial_search(reqs: Array, dice: Array, selected: Array, index: in
 			if _partial_search(reqs, dice, selected, index + 1, next):
 				return true
 	return false
+
+static func path_to(origin: Vector2i, destination: Vector2i, size: int, blocked: Array, occupied: Array) -> Array:
+	var routes := {origin: []}
+	var pending: Array = [origin]
+	while not pending.is_empty():
+		var current: Vector2i = pending.pop_front()
+		for direction in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
+			var tile: Vector2i = current+direction
+			if routes.has(tile) or not legal_move(current,tile,size,blocked,occupied):
+				continue
+			var route: Array = routes[current].duplicate()
+			route.append(tile)
+			if tile == destination: return route
+			routes[tile] = route
+			pending.append(tile)
+	return []

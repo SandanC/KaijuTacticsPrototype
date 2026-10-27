@@ -1,21 +1,30 @@
-# Milestone 1 design assumptions
+# Current prototype assumptions
 
-The user's request permits Godot or GameMaker. This implementation uses **Godot 4.6**, superseding the attached documents' GameMaker-specific directions. The implementation prompt supplies the milestone scope and acceptance criteria; the GDD supplies mechanics and sample content. This is a new independent game in the previously empty repository.
+The user's later design decisions supersede the initial implementation prompt's all-dice-every-turn loop and the first prototype's layout. Godot remains the explicitly permitted engine. The approved visual starting point is `design/battle-screen-mockup-03.png`.
 
-- One open 10×10 board, one-tile footprints, orthogonal movement and Manhattan adjacency. No obstacles are placed in this first encounter. The movement validator already rejects blocked and occupied tiles.
-- Basic Move costs exactly one Movement face for exactly one tile, as provisionally specified. No free movement or action points.
-- Tail Slash and Roar use the GDD's exact six-face distributions, colors, costs and damage. Dice belong to the shared pool and keep unique instance IDs.
-- Cards stay visible. Each use is paid separately and can repeat if distinct matching dice remain. This is a provisional interpretation of the GDD's open repeat-use decision, not a permanent rule.
-- Scenario balance placeholders: Mossback 8 HP at (3,5); infantry 5 HP at (7,5), 1 damage, range 1, movement 1. Coordinates are zero-based in data; the board displays A–J and 1–10. These values favor an easy first battle.
-- Infantry attacks if adjacent at the start of its phase; otherwise it advances one tile and does not also attack. Stable neighbor order is left, right, up, down, selecting only closer legal tiles. This is sufficient for the open board; obstacle-routing AI belongs to the terrain milestone.
-- Roar is confirmed by clicking any highlighted adjacent enemy and hits all adjacent enemies. It cannot be wasted when there are no legal targets.
-- Turns end explicitly with End Turn / Space, even if dice are exhausted. This keeps enemy timing under player control and enables inspection of spent dice.
-- Defense and Regeneration faces are visible but have no spend action in Milestone 1, following the prompt's placement of defense/healing in Milestone 2. Passing discards unused rolls. No rerolls, mitigation, shields or passives have been added.
-- Seeded RNG is isolated in the battle model. New Battle uses a time-derived seed; tests supply fixed seeds. This prototype has no save system or permanent progression.
-- No drafting, second encounter, alternate scenario, advanced attack shapes, terrain art, audio or external assets in this slice. The shared-pool acquisition helper is present for initialization, but reward drafting is deliberately deferred.
+## Agreed behavior
 
-Future decisions remain open: repeat-use policy, defense duration, movement magnitude, larger footprints, passive/color affinities, destructible terrain and ultimate-card die counts.
+- Tactical map is the main view; ability cards are on the side. Standard units occupy one tile; larger bosses are future content.
+- Dice are drawn from a pool at turn start, roll visibly onto the screen, then transfer to the bottom Rolled tray. Dice are simulated-3D cubes at the smaller approved scale.
+- Trays are continuous shared surfaces, not fixed die sockets. Card payments use individual symbol/color slots.
+- Ability ranges are shown on top-down square grids, independently of the map's isometric view.
+- Movement accepts any number of Movement dice and displays their total. Dragging dice out reduces it. One confirmed action follows the entire selected route; only the dice needed by the route are spent. Excess movement returns to Rolled.
+- Spending moves dice into Used. At turn end, all remaining rolled/card/movement dice also enter Used. Used dice return to the pool when it needs refilling, not automatically at every turn start.
+- Zones are modular and transfers emit events for future ability interactions. Reserve/retrieval tests demonstrate extensibility; no new reserve/retrieval gameplay ability is added.
 
-## Requested presentation and interaction revision
+## Provisional tuning for this playable pass
 
-The battlefield now uses an isometric tactical RPG view with original drawn sprites and a navy/gold command HUD. Grass, road markings, stones and distant ridges are cosmetic and do not change the open-board scenario. Visible cube dice tumble before each turn; cosmetic face cycling never consumes gameplay RNG or changes the settled result. Actions are locked during the roll. Dragging a die onto a card stages an explicit payment, one die at a time; targeting confirms spending. Cancelling returns staged resources. These changes follow the user’s presentation and drag-payment requests and add no permanent combat mechanics.
+- Draw **two dice** from **three starter cards/dice**. This lets players see a partial-pool draw and refill. Draw count and equipped-card limit remain undecided.
+- Tail Slash, Roar and Regenerative Hide use their GDD costs, damage/healing and face distributions. Adding Hide supplies the third die through a visible card, not a free unexplained die. Generic starter costs demonstrate shared dice; colored and mixed slots are supported and tested.
+- Pool draws select uniformly without replacement using the battle's seeded RNG. If the pool empties mid-draw, refill from Used and complete the draw. If both are empty, draw fewer dice; never reuse an already drawn die in the same turn.
+- Allocations can persist across selecting different cards. Cancel affects the current action; dragging a die back removes just that die. Activation consumes its allocated payment only after a legal target is confirmed.
+- Each Movement die is worth one orthogonal tile. All movement dice are equivalent, so the first assigned dice pay the selected route and the rest return. No retained movement allowance or free movement is introduced.
+- Mossback has 8 HP, infantry 5 HP/1 damage/range 1/movement 1. Infantry attacks if already adjacent; otherwise it advances without also attacking. Path ties use stable left/right/up/down ordering.
+- Four building tiles are impassable. Other surface details are cosmetic. The objective is defeat all enemies, with failure at zero player HP.
+- Self-healing requires missing HP and caps at maximum. Cards can be used again if new compatible dice remain. Defense faces are unused in this pass.
+
+## Presentation and scope
+
+Runtime art is functional original placeholder drawing, not the finished pixel art in the concept illustration. The dice are animated simulated 3D, not physical mesh dice. Dice roll results come from the model; cosmetic face cycling, rotation and bounce do not consume gameplay RNG.
+
+No drafting, run map, second encounter, passive system, equipment limit, large boss, sound, external art pack or finished exports are included. These remain future decisions. The current sidebar displays three cards; more cards require scrolling/equipment design. Zones can be extended in the model; new gameplay zones still need deliberate UI and effect design.
