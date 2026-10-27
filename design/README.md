@@ -1,3 +1,15 @@
+# Battle-screen concept 03 — visual starting point
+
+![Compact dice and payment slots](battle-screen-mockup-03.png)
+
+Revision requested: reduce dice and dice-payment slots to approximately half their previous size. Dice now occupy less of each open shared tray; payment sockets are more compact. Keep range diagrams and text readable at full size. The map-led composition, single-tile standard units, side-panel cards, top-down square range diagrams and open dice trays remain the design direction. The image is approximate concept art; implementation should target 50% linear dice/slot scaling relative to concept 02.
+
+This is the visual starting point for continued design review, not authorization to resume or expand gameplay implementation. No gameplay code changed. Draw count, card limit, exact zone behaviors beyond the agreed cycle, and final assets remain to be settled.
+
+---
+
+## Earlier revisions
+
 # Battle-screen concept 02 — for design review
 
 ![Revised battle-screen mockup](battle-screen-mockup-02.png)
